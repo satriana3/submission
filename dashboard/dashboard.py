@@ -3,12 +3,32 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-st.set_page_config(page_title="RFM Dashboard", layout="wide")
+# ===============================
+# PAGE CONFIG
+# ===============================
+st.set_page_config(
+    page_title="RFM Customer Segmentation Dashboard",
+    layout="wide"
+)
 
-st.title("📊 RFM Customer Segmentation Dashboard")
+# ===============================
+# HEADER
+# ===============================
+st.markdown(
+    """
+    <h1 style='text-align: center;'>📊 RFM Customer Segmentation Dashboard</h1>
+    <p style='text-align: center; color: gray;'>
+    Analisis segmentasi pelanggan berbasis Recency, Frequency, dan Monetary (RFM)
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
-# Load data
-@st.cache_data
+st.divider()
+
+# ===============================
+# LOAD DATA (CLOUD SAFE)
+# ===============================
 @st.cache_data
 def load_data():
     base_dir = os.path.dirname(__file__)
@@ -17,48 +37,139 @@ def load_data():
 
 rfm_df = load_data()
 
-# Sidebar filter
-st.sidebar.header("Filter Segment")
+# ===============================
+# SIDEBAR
+# ===============================
+st.sidebar.markdown("## ⚙️ Filter Dashboard")
+
 segment_option = st.sidebar.multiselect(
-    "Pilih Segment",
+    "Pilih Segment Pelanggan",
     options=rfm_df['Segment'].unique(),
     default=rfm_df['Segment'].unique()
 )
 
 filtered_df = rfm_df[rfm_df['Segment'].isin(segment_option)]
 
-# KPI Metrics
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📌 Tentang Dashboard")
+st.sidebar.write(
+    "Dashboard ini menampilkan hasil segmentasi pelanggan "
+    "menggunakan metode **RFM (Recency, Frequency, Monetary)** "
+    "untuk membantu memahami perilaku dan kontribusi pelanggan."
+)
+
+# ===============================
+# KPI METRICS
+# ===============================
+st.subheader("📈 Ringkasan Utama")
+
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Total Customers", filtered_df['customer_unique_id'].nunique())
-col2.metric("Total Revenue", f"R$ {filtered_df['monetary'].sum():,.2f}")
-col3.metric("Avg Frequency", f"{filtered_df['frequency'].mean():.2f}")
+col1.metric(
+    "👥 Total Customers",
+    f"{filtered_df['customer_unique_id'].nunique():,}"
+)
+
+col2.metric(
+    "💰 Total Revenue",
+    f"R$ {filtered_df['monetary'].sum():,.2f}"
+)
+
+col3.metric(
+    "🔁 Rata-rata Frequency",
+    f"{filtered_df['frequency'].mean():.2f}"
+)
 
 st.divider()
 
-# Segment Distribution
-st.subheader("Distribusi Segmentasi Pelanggan")
-segment_counts = filtered_df['Segment'].value_counts()
+# ===============================
+# VISUALIZATION ROW 1
+# ===============================
+col_left, col_right = st.columns(2)
 
-fig1, ax1 = plt.subplots()
-ax1.bar(segment_counts.index, segment_counts.values)
-ax1.set_ylabel('Jumlah Pelanggan')
-ax1.set_xlabel('Segment')
-plt.xticks(rotation=45)
+# ---- PIE CHART: Segment Distribution
+with col_left:
+    st.subheader("🧩 Distribusi Segmentasi Pelanggan")
 
-st.pyplot(fig1)
+    segment_counts = filtered_df['Segment'].value_counts()
 
-# Revenue per Segment
-st.subheader("Kontribusi Revenue per Segment")
-revenue_segment = filtered_df.groupby('Segment')['monetary'].sum().sort_values()
+    fig1, ax1 = plt.subplots()
+    ax1.pie(
+        segment_counts.values,
+        labels=segment_counts.index,
+        autopct='%1.1f%%',
+        startangle=90
+    )
+    ax1.axis('equal')
 
-fig2, ax2 = plt.subplots()
-ax2.barh(revenue_segment.index, revenue_segment.values)
-ax2.set_xlabel('Total Revenue')
+    st.pyplot(fig1)
 
-st.pyplot(fig2)
+# ---- BARH CHART: Revenue per Segment
+with col_right:
+    st.subheader("💰 Kontribusi Revenue per Segment")
 
-# Data preview
-st.subheader("Preview Data RFM")
-st.dataframe(filtered_df.head(20))
+    revenue_segment = (
+        filtered_df.groupby('Segment')['monetary']
+        .sum()
+        .sort_values()
+    )
 
+    fig2, ax2 = plt.subplots()
+    bars = ax2.barh(revenue_segment.index, revenue_segment.values)
+
+    for bar in bars:
+        ax2.text(
+            bar.get_width(),
+            bar.get_y() + bar.get_height() / 2,
+            f" R$ {bar.get_width():,.0f}",
+            va='center'
+        )
+
+    ax2.set_xlabel("Total Revenue")
+    st.pyplot(fig2)
+
+st.divider()
+
+# ===============================
+# VISUALIZATION ROW 2
+# ===============================
+col_a, col_b = st.columns(2)
+
+# ---- RFM SCORE DISTRIBUTION
+with col_a:
+    st.subheader("📊 Distribusi RFM Score")
+
+    fig3, ax3 = plt.subplots()
+    ax3.hist(filtered_df['RFM_Score'], bins=10)
+    ax3.set_xlabel("RFM Score")
+    ax3.set_ylabel("Jumlah Pelanggan")
+
+    st.pyplot(fig3)
+
+# ---- INSIGHT BOX
+with col_b:
+    st.subheader("💡 Insight Otomatis")
+
+    top_segment = revenue_segment.idxmax()
+    top_revenue = revenue_segment.max()
+
+    st.success(
+        f"""
+        **Segmen dengan kontribusi pendapatan terbesar adalah _{top_segment}_.**
+
+        Total pendapatan dari segmen ini mencapai  
+        **R$ {top_revenue:,.2f}**, menunjukkan bahwa pelanggan dalam segmen ini
+        memiliki nilai bisnis yang sangat tinggi dan perlu dipertahankan.
+        """
+    )
+
+st.divider()
+
+# ===============================
+# DATA PREVIEW
+# ===============================
+st.subheader("📄 Preview Data RFM (Top 20)")
+st.dataframe(
+    filtered_df.head(20),
+    use_container_width=True
+)
